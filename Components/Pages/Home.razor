@@ -1,0 +1,136 @@
+﻿@page "/"
+
+<PageTitle>Home</PageTitle>
+<MudText Typo="Typo.subtitle1">A demo of beating the keydown of AutoComplete</MudText>
+<div class="form-page-container">
+    <MudContainer Class="pt-6">
+        <MudGrid>
+            <MudItem xs=12>
+                <keydown-override>
+                    <MudAutocomplete @bind-Value="P"
+                    @bind-Value:after="@(() => GoToRecord())"
+                    SearchFunc="Search"
+                    Variant="Variant.Outlined"
+                    Label="Search">
+                        <ItemTemplate Context="i">
+                            <MudStack>
+                                <MudButton Color="Color.Secondary" Variant="Variant.Filled" Href="@($"/snippet/#/{i.login.uuid}/info")">Info</MudButton>
+                                <MudLink Href="@($"/snippet/#/{i.login.uuid}/records")" Underline="Underline.None" Style="width: 100%;">
+                                    <MudStack AlignItems="AlignItems.Center" Justify="Justify.FlexStart" Row>
+                                        <MudStack Spacing="0" Style="flex: 1;">
+                                            <MudText Typo="Typo.h6">@i.ToString()</MudText>
+                                            <MudText Typo="Typo.body2">@i.dob?.age (@i.dob?.date.ToShortDateString())</MudText>
+                                        </MudStack>
+                                        <MudText>@i.location.address</MudText>
+                                    </MudStack>
+                                </MudLink>
+                            </MudStack>
+                        </ItemTemplate>
+                    </MudAutocomplete>
+                </keydown-override>
+            </MudItem>
+            <MudItem xs=12>
+                <MudText Typo="Typo.h6" Htmltag="h1">People @People.Count() @P?.name.ToString()</MudText>
+                <MudText Typo="Typo.h6" Htmltag="h1">Page = @sendto</MudText>
+                <MudTable Items="@People" Hover="true" Breakpoint="Breakpoint.Xs" Loading="@IsLoading" LoadingProgressColor="Color.Info">
+                    <HeaderContent>
+                        <MudTh>Name</MudTh>
+                    </HeaderContent>
+                    <RowTemplate>
+                        <MudTd DataLabel="Name">
+                            @context.name.ToString()
+                        </MudTd>
+                    </RowTemplate>
+                </MudTable>
+            </MudItem>
+        </MudGrid>
+    </MudContainer>
+</div>
+
+@code {
+    [Inject] IJSRuntime JsRuntime { get; set; } = default!;
+    [Inject] NavigationManager NavigationManager { get; set; } = default!;
+    [Inject] ISnackbar Snackbar { get; set; } = default!;
+    private bool IsLoading { get; set; } = false;
+    private Person.Result P { get; set; } = default!;
+    private List<Person.Result> People { get; set; } = [];
+    private string sendto { get; set; } = string.Empty;
+    private DotNetObjectReference<Home>? _dotNetObjectReference { get; set; }
+
+    protected override async Task OnInitializedAsync()
+    {
+        // Handle Navigation for Demo
+        NavigationManager.RegisterLocationChangingHandler(OnLocationChanging);
+
+        People = await GetPeople();
+
+        // IsLoading
+        IsLoading = false;
+
+        // Call the base class
+        await base.OnInitializedAsync();
+    }
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (firstRender)
+        {
+            _dotNetObjectReference = DotNetObjectReference.Create(this);
+            await JsRuntime.InvokeVoidAsync("setDotNetReferenceOnElement", _dotNetObjectReference);
+        }        
+    }
+
+    [JSInvokable]
+    public async Task CallOnKeyDownAsync(KeyboardEventArgs args)
+    {
+        Snackbar.Add($"Key Down: {args.Key}");
+        await Task.CompletedTask;
+    }
+
+    private void GoToRecord()
+    {
+        // Sends user to /snippet/#/{P.login.uuid}/records
+        sendto = $"/snippet/#/{P.login.uuid}/records";
+    }
+
+    private async Task<List<Person.Result>> GetPeople(int count = 10)
+    {
+        using var client = new HttpClient();
+        var response = await client.GetAsync($"https://randomuser.me/api/?results={count}");
+
+        try
+        {
+            response.EnsureSuccessStatusCode();
+            string content = await response.Content.ReadAsStringAsync();
+
+            People People = System.Text.Json.JsonSerializer.Deserialize<People>(content);
+            return People?.results ?? [];
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine(ex.Message);
+        }
+
+        return new List<Person.Result>();
+    }
+
+    private async Task<IEnumerable<Person.Result>> Search(string value, System.Threading.CancellationToken token)
+    {
+        // if text is null or empty, show complete list
+        if (string.IsNullOrEmpty(value)) return new List<Person.Result>();
+
+        return People.Where(x => x.name.fullname.Contains(value, StringComparison.InvariantCultureIgnoreCase)).ToList();
+    }
+
+    private ValueTask OnLocationChanging(LocationChangingContext context)
+    {
+        // Prevent all navigation
+        context.PreventNavigation();
+
+        //
+        sendto = context.TargetLocation;
+
+        // Optional: Show a modal or message to the user here
+        return ValueTask.CompletedTask;
+    }
+}
