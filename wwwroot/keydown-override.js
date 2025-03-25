@@ -1,5 +1,4 @@
-﻿class KeyDownOverride extends HTMLElement {
-    dotNetReference;
+﻿class KeyDownOverride extends HTMLElement {    
     constructor() {
         super();
     }
