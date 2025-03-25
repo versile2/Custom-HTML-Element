@@ -22,8 +22,7 @@ This repository demonstrates a custom HTML element, `<keydown-override>`, built 
 
 ### JavaScript (Custom Element Definition)
 ```javascript
-class KeyDownOverride extends HTMLElement {
-    dotNetReference;
+class KeyDownOverride extends HTMLElement {    
     constructor() {
         super();
     }
